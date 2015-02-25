@@ -6,10 +6,6 @@ import Communicate
 import ReadConfig
 import ShowProgress
 
-import Control.Monad
-import Control.Applicative
-import Data.Maybe
-import System.Environment
 import Control.Concurrent
 import Control.Monad.Loops
 
