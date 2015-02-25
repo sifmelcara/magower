@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LAGUAGE LambdaCase #-}
 
 module MakeJSON where
 
@@ -15,6 +15,8 @@ mkAddContent lnk = encode $ AddReq lnk
 
 mkQurContent :: TorID -> BL.ByteString
 mkQurContent tid = encode $ QurReq [tid]
+
+decode
 
 data AddReq = AddReq { filename :: String }
 data AddRes = Duplicate | AddRes { torID :: TorID }
