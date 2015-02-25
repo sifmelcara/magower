@@ -5,9 +5,16 @@ module MakeJSON where
 
 import Data.Aeson
 import Control.Applicative
+import qualified Data.ByteString.Lazy.Char8 as BL
 
 type TorID = Integer
 type SesID = String
+
+mkAddContent :: String -> BL.ByteString
+mkAddContent lnk = encode $ AddReq lnk
+
+mkQurContent :: TorID -> BL.ByteString
+mkQurContent tid = encode $ QurReq [tid]
 
 data AddReq = AddReq { filename :: String }
 data AddRes = Duplicate | AddRes { torID :: TorID }
