@@ -26,6 +26,18 @@ throwLink lk = do
         (4, 0, 9) -> return Nothing -- confilict
         code    -> error $ "cannot recognize response code " ++ show code
 
+getProgress :: TorID -> IO (Maybe Double)
+getProgress tid = do
+    uri <- readURI
+    sid <- genSesID
+    res <- simpleHTTP . genPostReq uri sid $ mkQurContent tid 
+    getResponseCode res >>= \case
+        (2, _, _) -> decode <$> getResponseBody res >>= \case
+            Nothing -> error $ "NOthing in getProgress response!"
+            Just x -> return . Just $ percentDone x
+        (4, 0, 9) -> return Nothing
+        code    -> error $ "cannot recognize response code" ++ show code
+
 {-
 sentLnk :: String -> SesID -> IO TorID
 sentLnk lnk sid = do

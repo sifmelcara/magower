@@ -16,6 +16,7 @@ main = do
     checkConfig
     link <- getLink
     tid <- untilJust $ throwLink link
+    forever $ putStrLn . show =<< (untilJust $ getProgress tid)
     return ()
     
 
