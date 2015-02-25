@@ -4,16 +4,26 @@
 name:                magower
 version:             1.0
 synopsis:            magnet thrower
--- description:         
+description:         simply add a magnet link to transmission daemon
+                     .
+                     after the program started, it will ask you a magnet link to add to transmission daemon.
+                     .
+                     default transmission server is 127.0.0.1, you can change default server in ~/.magower
+                     .
 license:             PublicDomain
 license-file:        LICENSE
 author:              sifmelcara
 maintainer:          rbdn@9mm.davy.tw
 -- copyright:           
--- category:            
+category:            Network 
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
+
+source-repository head
+    type:     git
+    location: https://github.com/sifmelcara/magower
+
 
 executable magower
   main-is:             Main.hs
