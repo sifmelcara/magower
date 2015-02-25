@@ -6,6 +6,7 @@ module ReadConfig where
 import Network.URI
 import Data.Maybe
 import System.Directory
+import System.FilePath
 import qualified Data.Configurator as C
 
 readURI :: IO URI

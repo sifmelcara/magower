@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 
+import GetLink
+import Communicate
+import ReadConfig
 
 import Control.Monad
 import Control.Applicative
@@ -11,4 +14,13 @@ import Control.Concurrent
 main :: IO ()
 main = do
     checkConfig
-    link <- GetLink
+    link <- getLink
+    tid <- untilJust $ throwLink link
+    return ()
+    
+
+untilJust :: Monad m => m (Maybe a) -> m a
+untilJust m = m >>= \case
+    Nothing -> untilJust m
+    Just x -> return x
+        
