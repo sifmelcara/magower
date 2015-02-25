@@ -3,6 +3,7 @@
 module Communicate where
 
 import MakeJSON
+import ReadConfig
 
 import Data.Aeson
 import Data.Maybe
@@ -56,7 +57,7 @@ getStat tid sid = do
 genSesID :: IO SesID
 genSesID = do
     uri <- readURI
-    Right resp <- simpleHTTP $ getRequest uri
+    Right resp <- simpleHTTP $ Request uri GET [] ""
     return $ fromJust . lookupHeader sesHd $ getHeaders resp 
     where sesHd = HdrCustom "X-Transmission-Session-Id"
 

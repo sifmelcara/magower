@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LAGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase #-}
 
 module MakeJSON where
 
@@ -16,8 +16,6 @@ mkAddContent lnk = encode $ AddReq lnk
 mkQurContent :: TorID -> BL.ByteString
 mkQurContent tid = encode $ QurReq [tid]
 
-decode
-
 data AddReq = AddReq { filename :: String }
 data AddRes = Duplicate | AddRes { torID :: TorID }
 data QurReq = QurReq { ids :: [Integer] }
@@ -28,10 +26,10 @@ instance ToJSON AddReq where
 
 instance FromJSON AddRes where
     parseJSON (Object v) = do
-        args <- v .: "arguments"
-        args .:? "torrent-added" >>= \case
-            Just x -> AddRes <$> (x .: "id")
-            _   -> return Duplicate
+        args <- v .: "arguments" 
+        (args .:? "torrent-added") >>= \case 
+            Just x -> AddRes <$> (x .: "id") 
+            Nothing -> return Duplicate
     parseJSON v = error $ "FromJSON instance for AddRes get: " ++ show v
 
 instance ToJSON QurReq where
