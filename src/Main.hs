@@ -19,6 +19,7 @@ main = do
     link <- getLink
     tid <- untilJust $ throwLink link
     whileM_ (checkContinue tid) $ putPrg tid
+    putStrLn "\nDownload finish!"
     return ()
     where putPrg t = do
             pgs <- untilJust $ getProgress t
