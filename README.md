@@ -1,8 +1,18 @@
 # magower
 
-simply add a magnet link to transmission daemon
+A command line program that simply add a magnet link to a transmission daemon (via rpc),
+after the program started, you can paste a magnet link to add it to the transmission daemon,
+and a progressbar will be shown in the terminal.
 
-after the program started, it will ask you a magnet link to add to transmission daemon.
+Default transmission server is 127.0.0.1, you can change the server location in ~/.magower.
 
-default transmission server is 127.0.0.1, you can change default server in ~/.magower
+version 1.0: initial release.
+version 2.0: add https support.
+
+
+WARNING:
+This repository contains low quality haskell code because
+author has no patience and time could spend on this project.
+
+
 
