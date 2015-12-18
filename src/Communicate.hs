@@ -25,11 +25,12 @@ import Control.Exception
 import Network.HTTP.Types.Status
 
 throwLink :: String -> 
+             NHC.Manager -> 
              IO (Maybe TorID)  -- ^ return Nothing to try again in Main.
-throwLink lk = do
+throwLink lk manager = do
     uri <- readURIString
     --traceShow uri $ return ()
-    sid <- genSesID
+    sid <- genSesID manager
     iniReq <- NHC.parseUrl uri
     let req = iniReq
               { NHC.checkStatus = \_ _ _ -> Nothing
@@ -47,8 +48,6 @@ throwLink lk = do
                         Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
     traceShow areq $ return ()
     --traceShow (mkAddContent lk) $ return ()
-    -- create a new manager everytime (bad code)
-    manager <- NHC.newManager tlsManagerSettings
     rbs <- ((NHC.httpLbs areq manager)::IO (NHC.Response BL.ByteString)) 
     traceShow "server response:" $ return ()
     traceShow rbs $ return ()
@@ -63,10 +62,10 @@ throwLink lk = do
     stcp :: Int -> (Int, Int, Int)
     stcp i = let (s::[Char]) = show i in (read $ [s !! 0], read $ [s !! 1], read $ [s !! 2])
 
-getProgress :: TorID -> IO (Maybe Double)
-getProgress tid = do
+getProgress :: TorID -> NHC.Manager -> IO (Maybe Double)
+getProgress tid manager = do
     uri <- readURIString
-    sid <- genSesID
+    sid <- genSesID manager
     iniReq <- NHC.parseUrl uri
     let req = iniReq
               { NHC.checkStatus = \_ _ _ -> Nothing
@@ -82,8 +81,6 @@ getProgress tid = do
                     Just usern -> case password auth of
                         Nothing -> error "only username present in config file, but not password"
                         Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
-    -- create a new manager everytime (bad code)
-    manager <- NHC.newManager tlsManagerSettings
     rbs <- ((NHC.httpLbs areq manager)::IO (NHC.Response BL.ByteString)) 
     case (stcp . statusCode $ NHC.responseStatus rbs) of
         (2, _, _) -> case decode $ NHC.responseBody rbs of
@@ -104,18 +101,15 @@ getProgress tid = do
         code    -> error $ "cannot recognize response code" ++ show code
     -}
 
-genSesID :: IO SesID
-genSesID = do
+genSesID :: NHC.Manager -> IO SesID
+genSesID manager = do
     uri <- readURIString
     iniReq <- NHC.parseUrl uri
     let req = iniReq
               { NHC.checkStatus = \_ _ _ -> Nothing
               }
-    -- create a new manager everytime (bad code)
-    manager <- NHC.newManager tlsManagerSettings
     rbs <- ((NHC.httpLbs req manager)::IO (NHC.Response BL.ByteString)) 
     --traceShow rbs $ return ()
-    --NHC.closeManager manager
     let sid = lookupSessionId $ NHC.responseHeaders rbs
     case sid of
         Nothing -> error "cannot generate session id"
