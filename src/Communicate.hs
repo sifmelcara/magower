@@ -1,16 +1,26 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Communicate where
 
 import MakeJSON
 import ReadConfig
 
+import Debug.Trace
 import Data.Aeson
 import Data.Maybe
 import Control.Applicative
 import Network.HTTP
 import Network.URI
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as BC
+
+import qualified Network.HTTP.Conduit as NHC
+import Network.HTTP.Client.TLS
+import Network.HTTP.Types.Header
+import Data.CaseInsensitive
+import Control.Exception
 
 throwLink :: String -> 
              IO (Maybe TorID)  -- ^ return Nothing to try again in Main.
@@ -38,40 +48,28 @@ getProgress tid = do
         (4, 0, 9) -> return Nothing
         code    -> error $ "cannot recognize response code" ++ show code
 
-{-
-sentLnk :: String -> SesID -> IO TorID
-sentLnk lnk sid = do
-    res <- simpleHTTP $ genPostReq remoteURI sid (encode . AddReq $ lnk)
-    rbd <- getResponseBody res
-    getResponseCode res >>= \case
-        (2, _, _) -> decode <$> getResponseBody res >>= \case
-            Nothing -> error $ ("Nothing in sentLnk resp: " ++ show rbd)
-            Just Duplicate -> error "torrent duplicate!"
-            Just x -> return $ torID x
-        (4, 0, 9) -> sentLnk lnk =<< getSesId
-        code      -> error $ "cannot recognize response code " ++ show code
-
-getStat :: TorID -> SesID -> IO Stat
-getStat tid sid = do 
-    res <- simpleHTTP $ genPostReq remoteURI sid (encode $ QurReq [tid])
-    rbd <- getResponseBody res
-    getResponseCode res >>= \case
-        (2, _, _) -> decode <$> getResponseBody res >>= \case
-            Nothing -> do
-                putStrLn $ "Nothing in getStat resp: " ++ show rbd
-                putStrLn $ "tid = " ++ show tid
-                return $ Stat ">/////<"
-            Just x -> return $ qurResToStat x
-        (4, 0, 9) -> getStat tid =<< getSesId
-        code      -> error $ "cannot recognize response code " ++ show code
--}
-
 genSesID :: IO SesID
 genSesID = do
-    uri <- readURI
-    Right resp <- simpleHTTP $ Request uri GET [] ""
-    return $ fromJust . lookupHeader sesHd $ getHeaders resp 
-    where sesHd = HdrCustom "X-Transmission-Session-Id"
+    uri <- readURIString
+    -- create a new manager everytime (bad code)
+    manager <- NHC.newManager tlsManagerSettings
+    -- the fromJust in the next line assume there is no failure when parseUrl
+    rbs <- ((NHC.httpLbs (fromJust . NHC.parseUrl $ uri) manager)::IO (NHC.Response BL.ByteString)) `catch` xhandler
+    traceShow rbs $ return ()
+    --NHC.closeManager manager
+    let sid = lookupSessionId $ NHC.responseHeaders rbs
+    case sid of
+        Nothing -> error "cannot generate session id"
+        Just x -> return $ BC.unpack x
+    where 
+    lookupSessionId :: [Network.HTTP.Types.Header.Header] -> Maybe B.ByteString
+    lookupSessionId [] = Nothing
+    lookupSessionId ((name, ctnt):xs)
+        | (name) == (mk ("X-Transmission-Session-Id")) = Just $ ctnt
+        | otherwise = lookupSessionId xs
+    xhandler (NHC.StatusCodeException status headers _) = do
+        putStrLn "exception caught!"
+        return $ return BL.empty
 
 
 data Stat = Stat {dlProg :: String}

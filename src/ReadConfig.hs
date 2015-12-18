@@ -16,6 +16,13 @@ readURI = do
         Just servpath -> return . fromJust $ parseURI servpath
         Nothing -> error "please edit config file(.magower)."
 
+readURIString :: IO String
+readURIString = do
+    config <- C.load [C.Required "$(HOME)/.magower"]
+    C.lookup config "servpath" >>= \case
+        Just servpath -> return servpath
+        Nothing -> error "please edit config file(.magower)."
+
 checkConfig :: IO ()
 checkConfig = do
     homedir <- getHomeDirectory 
