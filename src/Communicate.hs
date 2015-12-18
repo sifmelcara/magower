@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Communicate where
 
@@ -21,25 +22,79 @@ import Network.HTTP.Client.TLS
 import Network.HTTP.Types.Header
 import Data.CaseInsensitive
 import Control.Exception
+import Network.HTTP.Types.Status
 
 throwLink :: String -> 
              IO (Maybe TorID)  -- ^ return Nothing to try again in Main.
 throwLink lk = do
-    uri <- readURI
+    uri <- readURIString
+    --traceShow uri $ return ()
     sid <- genSesID
-    res <- simpleHTTP . genPostReq uri sid $ mkAddContent lk
-    getResponseCode res >>= \case
-        (2, _, _) -> decode <$> getResponseBody res >>= \case
+    iniReq <- NHC.parseUrl uri
+    let req = iniReq
+              { NHC.checkStatus = \_ _ _ -> Nothing
+              , NHC.method = "POST"
+              , NHC.requestBody = NHC.RequestBodyLBS $ (mkAddContent lk)
+              , NHC.requestHeaders = genReqHeaders sid
+              }
+    let uriT = drop 2 . dropWhile (/= '/') $ uri
+    let areq = case parseURIAuthority uriT of
+                Nothing -> req
+                Just auth -> case user auth of
+                    Nothing -> req
+                    Just usern -> case password auth of
+                        Nothing -> error "only username present in config file, but not password"
+                        Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
+    traceShow areq $ return ()
+    --traceShow (mkAddContent lk) $ return ()
+    -- create a new manager everytime (bad code)
+    manager <- NHC.newManager tlsManagerSettings
+    rbs <- ((NHC.httpLbs areq manager)::IO (NHC.Response BL.ByteString)) 
+    traceShow "server response:" $ return ()
+    traceShow rbs $ return ()
+    case (stcp . statusCode $ NHC.responseStatus rbs) of
+        (2, _, _) -> case decode (NHC.responseBody rbs) of
             Nothing -> error $ "Nothing in throwLink response!"
             Just Duplicate -> error $ "torrent duplicate!"
             Just x -> return . Just $ torID x
         (4, 0, 9) -> return Nothing -- confilict
-        code    -> error $ "cannot recognize response code " ++ show code
+        code    -> error $ "throwLink: cannot recognize response code " ++ show code
+    where
+    stcp :: Int -> (Int, Int, Int)
+    stcp i = let (s::[Char]) = show i in (read $ [s !! 0], read $ [s !! 1], read $ [s !! 2])
 
 getProgress :: TorID -> IO (Maybe Double)
 getProgress tid = do
-    uri <- readURI
+    uri <- readURIString
     sid <- genSesID
+    iniReq <- NHC.parseUrl uri
+    let req = iniReq
+              { NHC.checkStatus = \_ _ _ -> Nothing
+              , NHC.method = "POST"
+              , NHC.requestBody = NHC.RequestBodyLBS $ (mkQurContent tid)
+              , NHC.requestHeaders = genReqHeaders sid
+              }
+    let uriT = drop 2 . dropWhile (/= '/') $ uri
+    let areq = case parseURIAuthority uriT of
+                Nothing -> req
+                Just auth -> case user auth of
+                    Nothing -> req
+                    Just usern -> case password auth of
+                        Nothing -> error "only username present in config file, but not password"
+                        Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
+    -- create a new manager everytime (bad code)
+    manager <- NHC.newManager tlsManagerSettings
+    rbs <- ((NHC.httpLbs areq manager)::IO (NHC.Response BL.ByteString)) 
+    case (stcp . statusCode $ NHC.responseStatus rbs) of
+        (2, _, _) -> case decode $ NHC.responseBody rbs of
+            Nothing -> error $ "NOthing in getProgress response!"
+            Just x -> return . Just $ percentDone x
+        (4, 0, 9) -> return Nothing
+        code    -> error $ "getPregress: cannot recognize response code " ++ show code
+    where
+    stcp :: Int -> (Int, Int, Int)
+    stcp i = let (s::[Char]) = show i in (read $ [s !! 0], read $ [s !! 1], read $ [s !! 2])
+    {-
     res <- simpleHTTP . genPostReq uri sid $ mkQurContent tid 
     getResponseCode res >>= \case
         (2, _, _) -> decode <$> getResponseBody res >>= \case
@@ -47,15 +102,19 @@ getProgress tid = do
             Just x -> return . Just $ percentDone x
         (4, 0, 9) -> return Nothing
         code    -> error $ "cannot recognize response code" ++ show code
+    -}
 
 genSesID :: IO SesID
 genSesID = do
     uri <- readURIString
+    iniReq <- NHC.parseUrl uri
+    let req = iniReq
+              { NHC.checkStatus = \_ _ _ -> Nothing
+              }
     -- create a new manager everytime (bad code)
     manager <- NHC.newManager tlsManagerSettings
-    -- the fromJust in the next line assume there is no failure when parseUrl
-    rbs <- ((NHC.httpLbs (fromJust . NHC.parseUrl $ uri) manager)::IO (NHC.Response BL.ByteString)) `catch` xhandler
-    traceShow rbs $ return ()
+    rbs <- ((NHC.httpLbs req manager)::IO (NHC.Response BL.ByteString)) 
+    --traceShow rbs $ return ()
     --NHC.closeManager manager
     let sid = lookupSessionId $ NHC.responseHeaders rbs
     case sid of
@@ -67,9 +126,6 @@ genSesID = do
     lookupSessionId ((name, ctnt):xs)
         | (name) == (mk ("X-Transmission-Session-Id")) = Just $ ctnt
         | otherwise = lookupSessionId xs
-    xhandler (NHC.StatusCodeException status headers _) = do
-        putStrLn "exception caught!"
-        return $ return BL.empty
 
 
 data Stat = Stat {dlProg :: String}
@@ -78,13 +134,10 @@ qurResToStat :: QurRes -> Stat
 qurResToStat (QurRes pd) = Stat $ show pd
 
 
-genPostReq :: URI -> SesID -> BL.ByteString -> Request BL.ByteString
-genPostReq url sid cnt = (Request url POST hdrs cnt)
-    where hdrs = [ mkHeader HdrContentType "Application/json"
-                 , mkHeader HdrContentLength (show $ BL.length cnt)
-                 , mkHeader sesHd sid
-                 ]
-          sesHd = HdrCustom "X-Transmission-Session-Id"
+genReqHeaders :: SesID -> [Network.HTTP.Types.Header.Header] 
+genReqHeaders sid = [ (mk "X-Transmission-Session-Id", BC.pack sid)
+                    , (mk "Content-Type", "Application/json")
+                    ]
 
 
 
