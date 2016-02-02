@@ -9,19 +9,14 @@ import ReadConfig
 
 import Debug.Trace
 import Data.Aeson
-import Data.Maybe
 import Control.Applicative
 import Network.HTTP
-import Network.URI
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
-
 import qualified Network.HTTP.Conduit as NHC
-import Network.HTTP.Client.TLS
 import Network.HTTP.Types.Header
 import Data.CaseInsensitive
-import Control.Exception
 import Network.HTTP.Types.Status
 
 throwLink :: String -> 
@@ -29,13 +24,12 @@ throwLink :: String ->
              IO (Maybe TorID)  -- ^ return Nothing to try again in Main.
 throwLink lk manager = do
     uri <- readURIString
-    --traceShow uri $ return ()
     sid <- genSesID manager
     iniReq <- NHC.parseUrl uri
     let req = iniReq
               { NHC.checkStatus = \_ _ _ -> Nothing
               , NHC.method = "POST"
-              , NHC.requestBody = NHC.RequestBodyLBS $ (mkAddContent lk)
+              , NHC.requestBody = NHC.RequestBodyLBS $ mkAddContent lk
               , NHC.requestHeaders = genReqHeaders sid
               }
     let uriT = drop 2 . dropWhile (/= '/') $ uri
@@ -47,20 +41,19 @@ throwLink lk manager = do
                         Nothing -> error "only username present in config file, but not password"
                         Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
     traceShow areq $ return ()
-    --traceShow (mkAddContent lk) $ return ()
-    rbs <- ((NHC.httpLbs areq manager)::IO (NHC.Response BL.ByteString)) 
+    rbs <- NHC.httpLbs areq manager :: IO (NHC.Response BL.ByteString) 
     traceShow "server response:" $ return ()
     traceShow rbs $ return ()
-    case (stcp . statusCode $ NHC.responseStatus rbs) of
+    case stcp . statusCode $ NHC.responseStatus rbs of
         (2, _, _) -> case decode (NHC.responseBody rbs) of
-            Nothing -> error $ "Nothing in throwLink response!"
-            Just Duplicate -> error $ "torrent duplicate!"
+            Nothing -> error "Nothing in throwLink response!"
+            Just Duplicate -> error "torrent duplicate!"
             Just x -> return . Just $ torID x
         (4, 0, 9) -> return Nothing -- confilict
         code    -> error $ "throwLink: cannot recognize response code " ++ show code
     where
     stcp :: Int -> (Int, Int, Int)
-    stcp i = let (s::[Char]) = show i in (read $ [s !! 0], read $ [s !! 1], read $ [s !! 2])
+    stcp i = let s::String = show i in (read $ [s !! 0], read $ [s !! 1], read $ [s !! 2])
 
 getProgress :: TorID -> NHC.Manager -> IO (Maybe Double)
 getProgress tid manager = do
@@ -70,7 +63,7 @@ getProgress tid manager = do
     let req = iniReq
               { NHC.checkStatus = \_ _ _ -> Nothing
               , NHC.method = "POST"
-              , NHC.requestBody = NHC.RequestBodyLBS $ (mkQurContent tid)
+              , NHC.requestBody = NHC.RequestBodyLBS $ mkQurContent tid
               , NHC.requestHeaders = genReqHeaders sid
               }
     let uriT = drop 2 . dropWhile (/= '/') $ uri
@@ -81,8 +74,8 @@ getProgress tid manager = do
                     Just usern -> case password auth of
                         Nothing -> error "only username present in config file, but not password"
                         Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
-    rbs <- ((NHC.httpLbs areq manager)::IO (NHC.Response BL.ByteString)) 
-    case (stcp . statusCode $ NHC.responseStatus rbs) of
+    rbs <- NHC.httpLbs areq manager :: IO (NHC.Response BL.ByteString)
+    case stcp . statusCode $ NHC.responseStatus rbs of
         (2, _, _) -> case decode $ NHC.responseBody rbs of
             Nothing -> error $ "NOthing in getProgress response!"
             Just x -> return . Just $ percentDone x
@@ -90,16 +83,7 @@ getProgress tid manager = do
         code    -> error $ "getPregress: cannot recognize response code " ++ show code
     where
     stcp :: Int -> (Int, Int, Int)
-    stcp i = let (s::[Char]) = show i in (read $ [s !! 0], read $ [s !! 1], read $ [s !! 2])
-    {-
-    res <- simpleHTTP . genPostReq uri sid $ mkQurContent tid 
-    getResponseCode res >>= \case
-        (2, _, _) -> decode <$> getResponseBody res >>= \case
-            Nothing -> error $ "NOthing in getProgress response!"
-            Just x -> return . Just $ percentDone x
-        (4, 0, 9) -> return Nothing
-        code    -> error $ "cannot recognize response code" ++ show code
-    -}
+    stcp i = let s::String = show i in (read [s !! 0], read [s !! 1], read [s !! 2])
 
 genSesID :: NHC.Manager -> IO SesID
 genSesID manager = do
@@ -108,8 +92,7 @@ genSesID manager = do
     let req = iniReq
               { NHC.checkStatus = \_ _ _ -> Nothing
               }
-    rbs <- ((NHC.httpLbs req manager)::IO (NHC.Response BL.ByteString)) 
-    --traceShow rbs $ return ()
+    rbs <- NHC.httpLbs req manager :: IO (NHC.Response BL.ByteString)
     let sid = lookupSessionId $ NHC.responseHeaders rbs
     case sid of
         Nothing -> error "cannot generate session id"
@@ -118,7 +101,7 @@ genSesID manager = do
     lookupSessionId :: [Network.HTTP.Types.Header.Header] -> Maybe B.ByteString
     lookupSessionId [] = Nothing
     lookupSessionId ((name, ctnt):xs)
-        | (name) == (mk ("X-Transmission-Session-Id")) = Just $ ctnt
+        | name == mk "X-Transmission-Session-Id" = Just ctnt
         | otherwise = lookupSessionId xs
 
 
