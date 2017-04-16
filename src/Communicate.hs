@@ -25,7 +25,7 @@ throwLink :: String ->
 throwLink lk manager = do
     uri <- readURIString
     sid <- genSesID manager
-    iniReq <- NHC.parseUrl uri
+    iniReq <- NHC.parseUrlThrow uri
     let req = iniReq
               { NHC.method = "POST"
               , NHC.requestBody = NHC.RequestBodyLBS $ mkAddContent lk
@@ -58,7 +58,7 @@ getProgress :: TorID -> NHC.Manager -> IO (Maybe Double)
 getProgress tid manager = do
     uri <- readURIString
     sid <- genSesID manager
-    iniReq <- NHC.parseUrl uri
+    iniReq <- NHC.parseUrlThrow uri
     let req = iniReq
               { NHC.method = "POST"
               , NHC.requestBody = NHC.RequestBodyLBS $ mkQurContent tid
@@ -86,7 +86,7 @@ getProgress tid manager = do
 genSesID :: NHC.Manager -> IO SesID
 genSesID manager = do
     uri <- readURIString
-    iniReq <- NHC.parseUrl uri
+    iniReq <- NHC.parseUrlThrow uri
     let req = iniReq
     rbs <- NHC.httpLbs req manager :: IO (NHC.Response BL.ByteString)
     let sid = lookupSessionId $ NHC.responseHeaders rbs
