@@ -40,8 +40,9 @@ throwLink lk manager = do
                     Just usern -> case password auth of
                         Nothing -> error "only username present in config file, but not password"
                         Just pass -> NHC.applyBasicAuth (BC.pack usern) (BC.pack pass) req
-    traceShow areq $ return ()
     rbs <- NHC.httpLbs areq manager :: IO (NHC.Response BL.ByteString) 
+    traceShow (areq { NHC.requestHeaders = [(mk "This is super secret", "may contain your password")]
+                    }) $ return ()
     traceShow "server response:" $ return ()
     traceShow rbs $ return ()
     case stcp . statusCode $ NHC.responseStatus rbs of
